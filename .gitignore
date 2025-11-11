@@ -1,0 +1,13 @@
+# 虚拟环境
+venv/
+
+# 缓存文件
+dict_cache.json
+diff.log
+
+# 输出目录
+output/*
+source/*
+patches/*
+
+!**/.gitkeep
