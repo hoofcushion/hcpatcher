@@ -5,24 +5,36 @@ from typing import Any, Optional, Union, List, Tuple, Dict
 
 TRANSLATION_CACHE_FILE = Path("dict_cache.json")
 
+
 def parse_path(path: str) -> List[Union[str, int]]:
     return [int(k) if k.isdigit() else k for k in path.split(".")] if path else []
 
+
 def index(container: Any, key: Union[str, int]) -> Optional[Any]:
-    if isinstance(key, int) and isinstance(container, list) and 0 <= key < len(container):
+    if (
+        isinstance(key, int)
+        and isinstance(container, list)
+        and 0 <= key < len(container)
+    ):
         return container[key]
     elif isinstance(container, dict) and key in container:
         return container[key]
     return None
 
+
 def newindex(container: Any, key: Union[str, int], value: Any) -> bool:
-    if isinstance(key, int) and isinstance(container, list) and 0 <= key < len(container):
+    if (
+        isinstance(key, int)
+        and isinstance(container, list)
+        and 0 <= key < len(container)
+    ):
         container[key] = value
         return True
     elif isinstance(container, dict) and key in container:
         container[key] = value
         return True
     return False
+
 
 def get_nested_value(data: Any, keys: List[Union[str, int]]) -> Optional[Any]:
     current = data
@@ -32,7 +44,10 @@ def get_nested_value(data: Any, keys: List[Union[str, int]]) -> Optional[Any]:
             return None
     return current
 
-def apply_patch(data: Any, path: str, operation: str, value: Any) -> Tuple[Any, bool, Optional[str]]:
+
+def apply_patch(
+    data: Any, path: str, operation: str, value: Any
+) -> Tuple[Any, bool, Optional[str]]:
     keys = parse_path(path)
     if not keys:
         if operation == "/=":
@@ -80,6 +95,7 @@ def apply_patch(data: Any, path: str, operation: str, value: Any) -> Tuple[Any, 
         return data, True, None
     return data, False, f"Unknown operation: {operation}"
 
+
 def apply_patch_with_translation(
     data: Any,
     path: str,
@@ -93,8 +109,11 @@ def apply_patch_with_translation(
         old_val = get_nested_value(data, parse_path(path))
         if old_val and isinstance(old_val, str):
             field_path = path if path else "root"
-            actual = get_cached_translation(translation_cache, filename, field_path, old_val)
+            actual = get_cached_translation(
+                translation_cache, filename, field_path, old_val
+            )
     return apply_patch(data, path, operation, actual)
+
 
 def apply_patch_with_log(
     data: Any,
@@ -105,9 +124,12 @@ def apply_patch_with_log(
     translation_cache: Optional[Dict[str, str]] = None,
 ) -> Tuple[Any, bool, Optional[str], Optional[Any], Optional[Any]]:
     old_val = get_nested_value(data, parse_path(path))
-    result, ok, err = apply_patch_with_translation(data, path, operation, value, filename, translation_cache)
+    result, ok, err = apply_patch_with_translation(
+        data, path, operation, value, filename, translation_cache
+    )
     new_val = get_nested_value(result, parse_path(path))
     return (result, ok, err, old_val, new_val)
+
 
 def load_translation_cache() -> Dict[str, str]:
     if TRANSLATION_CACHE_FILE.exists():
@@ -115,18 +137,33 @@ def load_translation_cache() -> Dict[str, str]:
             return json.load(f)
     return {}
 
+
 def save_translation_cache(cache: Dict[str, str]) -> None:
     with open(TRANSLATION_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
-def translate_text(text: str, source_lang: str = "en", target_lang: str = "zh") -> str:
+
+translator = None
+
+
+def translate_text(
+    text: str, source_lang: str = "en", target_lang: str = "zh"
+) -> Tuple[str, bool]:
+    global translator
+
     try:
-        from translate import Translator
-        translator = Translator(from_lang=source_lang, to_lang=target_lang)
-        return translator.translate(text)
+        if translator is None:
+            from translate import Translator
+
+            translator = Translator(from_lang=source_lang, to_lang=target_lang)
+        return translator.translate(text), True  # 返回翻译结果和成功标志
+    except ImportError:
+        print("未安装 translate 库，返回原文")
+        return text, False
     except Exception as e:
         print(f"翻译失败: {e}, 返回原文: {text}")
-        return text
+        return text, False
+
 
 def get_cached_translation(
     cache: Dict[str, str], filename: str, field_path: str, original_text: str
@@ -134,13 +171,23 @@ def get_cached_translation(
     cache_key = f"{filename}:{field_path}"
     if cache_key in cache:
         return cache[cache_key]
-    translated = translate_text(original_text)
-    cache[cache_key] = translated
-    save_translation_cache(cache)
-    print(f"翻译缓存: {original_text} -> {translated}")
+
+    translated, success = translate_text(original_text)
+
+    # 根据成功标志决定是否缓存
+    if success:
+        cache[cache_key] = translated
+        save_translation_cache(cache)
+        print(f"翻译缓存: {original_text} -> {translated}")
+    else:
+        print(f"翻译失败，不缓存: {original_text}")
+
     return translated
 
-def deep_merge_patches(base: Dict[str, Dict[str, Any]], new: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+
+def deep_merge_patches(
+    base: Dict[str, Dict[str, Any]], new: Dict[str, Dict[str, Any]]
+) -> Dict[str, Dict[str, Any]]:
     """深度合并补丁，相同文件的补丁操作会合并而不是覆盖"""
     result = base.copy()
     for filename, file_patches in new.items():
@@ -151,18 +198,19 @@ def deep_merge_patches(base: Dict[str, Dict[str, Any]], new: Dict[str, Dict[str,
             result[filename] = file_patches
     return result
 
+
 def load_patches_from_directory(patches_dir: Path) -> Dict[str, Dict[str, Any]]:
     """从 patches 文件夹加载所有 JSON 补丁文件，深度合并"""
     patches = {}
     if not patches_dir.exists():
         print(f"错误: patches 文件夹不存在: {patches_dir}")
         return patches
-    
+
     patch_files = sorted(patches_dir.glob("*.json"))
     if not patch_files:
         print(f"错误: patches 文件夹中没有找到 JSON 文件: {patches_dir}")
         return patches
-    
+
     for patch_file in patch_files:
         try:
             with open(patch_file, "r", encoding="utf-8") as f:
@@ -171,8 +219,9 @@ def load_patches_from_directory(patches_dir: Path) -> Dict[str, Dict[str, Any]]:
             print(f"加载补丁文件: {patch_file.name}")
         except Exception as e:
             print(f"错误: 无法加载补丁文件 {patch_file}: {e}")
-    
+
     return patches
+
 
 def test_functions():
     print("===测试核心函数===")
@@ -207,6 +256,7 @@ def test_functions():
     assert ok and result["items"] == ["a", "b", "c"]
     print("✓ apply_patch 测试通过")
 
+
 def process_patches() -> None:
     source_dir, output_dir, patches_dir, diff_log_file = (
         Path("source"),
@@ -214,22 +264,24 @@ def process_patches() -> None:
         Path("patches"),
         Path("diff.log"),
     )
-    
+
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(exist_ok=True)
-    
+
     # 只从 patches 文件夹加载补丁
     patches = load_patches_from_directory(patches_dir)
-    
+
     if not patches:
         print("错误: 未找到任何补丁文件")
         return
-    
+
     translation_cache = load_translation_cache()
     print(f"加载翻译缓存: {len(translation_cache)} 条记录")
-    print(f"加载补丁总数: {sum(len(file_patches) for file_patches in patches.values())} 个操作")
-    
+    print(
+        f"加载补丁总数: {sum(len(file_patches) for file_patches in patches.values())} 个操作"
+    )
+
     total, success, diff_log, failed = 0, 0, [], []
     for filename, file_patches in patches.items():
         source_path = source_dir / filename
@@ -242,7 +294,9 @@ def process_patches() -> None:
             total += 1
             path, op = path_op.rsplit("/", 1) if "/" in path_op else ("", "/=")
             op = "/" + op if "/" in path_op else op
-            data, ok, err, old, new = apply_patch_with_log(data, path, op, val, filename, translation_cache)
+            data, ok, err, old, new = apply_patch_with_log(
+                data, path, op, val, filename, translation_cache
+            )
             if ok:
                 success += 1
                 diff_log.append(f"{filename}: {path_op} | {repr(old)} -> {repr(new)}")
@@ -257,10 +311,15 @@ def process_patches() -> None:
     if diff_log:
         print("\nChanges:\n" + "\n".join(f"  {e}" for e in diff_log))
     if failed:
-        print("\nFailed:\n" + "\n".join(f"  {f['file']}: {f['op']} - {f['err']}" for f in failed))
+        print(
+            "\nFailed:\n"
+            + "\n".join(f"  {f['file']}: {f['op']} - {f['err']}" for f in failed)
+        )
+
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         test_functions()
         print("\n🎉 所有测试通过！")
