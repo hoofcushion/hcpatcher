@@ -101,7 +101,7 @@ python init.py
 | 操作符  | 功能           | 示例                     |
 | ------- | -------------- | ------------------------ |
 | `"/="`  | 赋值/替换      | `"name/=": "新名称"`     |
-| `"/-"`  | 删除           | `"废弃字段/-": null`     |
+| `"/-"`  | 删除           | `"discard/-": null`     |
 | `"/+$"` | 列表末尾添加   | `"tags/+$": "new_tag"`   |
 | `"/+^"` | 列表开头添加   | `"effects/+^": "buff"`   |
 | `"/+N"` | 在指定位置插入 | `"items/+1": "new_item"` |
@@ -145,7 +145,7 @@ python init.py
   "game_text.json": {
     "ui.menu.start/=": "<translate>",
     "ui.menu.options/=": "<translate>",
-    "ui.menu.quit/="": "退出游戏"
+    "ui.menu.quit/=": "退出游戏"
   },
 
   "items.json": {
@@ -233,7 +233,7 @@ python init.py test
    ```
    翻译失败: ..., 返回原文: original text
    ```
-   检查网络连接或翻译服务状态
+   检查网络连接、环境配置或翻译服务状态
 
 ## 未来可能实现的功能
 
